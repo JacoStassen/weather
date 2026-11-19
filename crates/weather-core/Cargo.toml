@@ -1,0 +1,19 @@
+[package]
+name = "weather-core"
+description = "Provider-agnostic weather domain types and the WeatherProvider abstraction"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars = { version = "1", features = ["chrono04"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+thiserror.workspace = true
+ts-rs = { version = "10", features = ["chrono-impl", "serde-json-impl"] }
+
+[dev-dependencies]
+tokio.workspace = true

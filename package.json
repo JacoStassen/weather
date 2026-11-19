@@ -1,0 +1,17 @@
+{
+  "name": "weather-app",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"cargo run -p weather-server\" \"npm -w web run dev\"",
+    "build": "npm -w web run build && cargo build --release -p weather-server",
+    "start": "cargo run --release -p weather-server",
+    "types": "cargo test -q -p weather-core && node web/scripts/types-index.mjs",
+    "test": "cargo test && npm -w web run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}
