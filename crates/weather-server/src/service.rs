@@ -1,4 +1,4 @@
-//! Request logic shared by the REST API and (in Phase 4) the MCP tools.
+//! Request logic shared by the REST API and the MCP tools.
 
 use std::sync::Arc;
 
@@ -7,11 +7,12 @@ use weather_core::{
     MarineResponse, ProviderError, WeatherProvider,
 };
 
-use crate::state::AppState;
+use crate::{auth::Access, state::AppState};
 
 /// Picks a provider. The registry lock is released before the caller awaits.
 fn resolve(
     state: &AppState,
+    access: Access,
     capability: Capability,
     point: GeoPoint,
     preferred: Option<&str>,
@@ -21,26 +22,28 @@ fn resolve(
         .registry
         .read()
         .expect("registry lock poisoned")
-        .resolve(capability, point, preferred)
+        .resolve_filtered(capability, point, preferred, |id| access.may_use(id))
 }
 
 pub async fn current(
     state: &AppState,
+    access: Access,
     point: GeoPoint,
     provider: Option<&str>,
 ) -> Result<CurrentConditions, ProviderError> {
-    resolve(state, Capability::Current, point, provider)?
+    resolve(state, access, Capability::Current, point, provider)?
         .current(point)
         .await
 }
 
 pub async fn forecast(
     state: &AppState,
+    access: Access,
     point: GeoPoint,
     range: ForecastRange,
     provider: Option<&str>,
 ) -> Result<Forecast, ProviderError> {
-    resolve(state, Capability::Hourly, point, provider)?
+    resolve(state, access, Capability::Hourly, point, provider)?
         .forecast(point, range)
         .await
 }
@@ -48,13 +51,13 @@ pub async fn forecast(
 /// Outside every alert provider's coverage this succeeds with
 /// `coverage: false` instead of failing, so callers can tell "no alerts"
 /// from "no alert data for this place".
-pub async fn alerts(state: &AppState, point: GeoPoint) -> Result<AlertsResponse, ProviderError> {
+pub async fn alerts(state: &AppState, access: Access, point: GeoPoint) -> Result<AlertsResponse, ProviderError> {
     let uncovered = || AlertsResponse {
         coverage: false,
         provider_id: None,
         alerts: Vec::new(),
     };
-    let provider = match resolve(state, Capability::Alerts, point, None) {
+    let provider = match resolve(state, access, Capability::Alerts, point, None) {
         Ok(p) => p,
         Err(ProviderError::NoProvider { .. }) => return Ok(uncovered()),
         Err(e) => return Err(e),
@@ -70,8 +73,8 @@ pub async fn alerts(state: &AppState, point: GeoPoint) -> Result<AlertsResponse,
     }
 }
 
-pub async fn marine(state: &AppState, point: GeoPoint) -> Result<MarineResponse, ProviderError> {
-    let provider = match resolve(state, Capability::Marine, point, None) {
+pub async fn marine(state: &AppState, access: Access, point: GeoPoint) -> Result<MarineResponse, ProviderError> {
+    let provider = match resolve(state, access, Capability::Marine, point, None) {
         Ok(p) => p,
         Err(ProviderError::NoProvider { .. }) => {
             return Ok(MarineResponse {

@@ -57,6 +57,18 @@ impl ProviderRegistry {
         point: GeoPoint,
         preferred: Option<&str>,
     ) -> Result<Arc<dyn WeatherProvider>, ProviderError> {
+        self.resolve_filtered(capability, point, preferred, |_| true)
+    }
+
+    /// [`resolve`](Self::resolve) among the providers whose id passes `allow`.
+    /// A preferred provider that doesn't pass is reported as unknown.
+    pub fn resolve_filtered(
+        &self,
+        capability: Capability,
+        point: GeoPoint,
+        preferred: Option<&str>,
+        allow: impl Fn(&str) -> bool,
+    ) -> Result<Arc<dyn WeatherProvider>, ProviderError> {
         if !point.is_valid() {
             return Err(ProviderError::InvalidLocation {
                 lat: point.lat,
@@ -67,6 +79,7 @@ impl ProviderRegistry {
         let preferred = match preferred {
             Some(id) => Some(
                 self.get(id)
+                    .filter(|_| allow(id))
                     .ok_or_else(|| ProviderError::UnknownProvider(id.to_owned()))?,
             ),
             None => None,
@@ -77,7 +90,7 @@ impl ProviderRegistry {
             .into_iter()
             .chain(fallback)
             .chain(self.providers.iter().cloned())
-            .find(|p| p.can_serve(capability, point))
+            .find(|p| allow(p.id()) && p.can_serve(capability, point))
             .ok_or(ProviderError::NoProvider { capability })
     }
 }
@@ -172,6 +185,22 @@ mod tests {
             registry().resolve(Capability::Current, GeoPoint::new(91.0, 0.0), None),
             Err(ProviderError::InvalidLocation { .. })
         ));
+    }
+
+    #[test]
+    fn filter_hides_providers_even_when_preferred() {
+        let r = registry();
+        let no_custom = |id: &str| !id.starts_with("custom:");
+        let p = GeoPoint::new(10.0, 10.0);
+        assert!(matches!(
+            r.resolve_filtered(Capability::Current, p, Some("custom:mine"), no_custom),
+            Err(ProviderError::UnknownProvider(_))
+        ));
+        let only_custom = |id: &str| id.starts_with("custom:");
+        assert_eq!(
+            r.resolve_filtered(Capability::Current, p, None, only_custom).unwrap().id(),
+            "custom:mine"
+        );
     }
 
     #[test]

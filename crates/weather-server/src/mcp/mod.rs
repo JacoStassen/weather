@@ -19,7 +19,7 @@ use weather_core::{
     ProviderError, ProviderInfo, TideEvent, WavePoint,
 };
 
-use crate::{service, state::AppState};
+use crate::{auth::Access, service, state::AppState};
 
 const INSTRUCTIONS: &str = "Weather data for any location, by latitude/longitude. \
 If you only have a place name, call search_places first to get coordinates. \
@@ -151,7 +151,7 @@ impl WeatherMcp {
         Parameters(a): Parameters<CurrentWeatherArgs>,
     ) -> Result<Json<CurrentConditions>, CallToolResult> {
         let point = GeoPoint::new(a.lat, a.lon);
-        service::current(&self.state, point, a.provider.as_deref())
+        service::current(&self.state, Access::OWNER, point, a.provider.as_deref())
             .await
             .map(Json)
             .map_err(tool_error)
@@ -162,7 +162,7 @@ impl WeatherMcp {
         annotations(title = "Severe weather alerts", read_only_hint = true, open_world_hint = true)
     )]
     async fn get_severe_alerts(&self, Parameters(a): Parameters<PointArgs>) -> Result<Json<AlertsResponse>, CallToolResult> {
-        service::alerts(&self.state, GeoPoint::new(a.lat, a.lon))
+        service::alerts(&self.state, Access::OWNER, GeoPoint::new(a.lat, a.lon))
             .await
             .map(Json)
             .map_err(tool_error)
@@ -173,7 +173,7 @@ impl WeatherMcp {
         annotations(title = "Marine & tides", read_only_hint = true, open_world_hint = true)
     )]
     async fn get_marine_tides(&self, Parameters(a): Parameters<PointArgs>) -> Result<Json<MarineTidesOutput>, CallToolResult> {
-        let res = service::marine(&self.state, GeoPoint::new(a.lat, a.lon))
+        let res = service::marine(&self.state, Access::OWNER, GeoPoint::new(a.lat, a.lon))
             .await
             .map_err(tool_error)?;
         Ok(Json(summarize_marine(res.report, chrono::Utc::now())))
@@ -190,7 +190,7 @@ impl WeatherMcp {
             hours: ForecastRange::default().hours.max(hours),
             days: a.days.unwrap_or(7).clamp(1, 16),
         };
-        let f = service::forecast(&self.state, GeoPoint::new(a.lat, a.lon), range, a.provider.as_deref())
+        let f = service::forecast(&self.state, Access::OWNER, GeoPoint::new(a.lat, a.lon), range, a.provider.as_deref())
             .await
             .map_err(tool_error)?;
         let now = chrono::Utc::now();

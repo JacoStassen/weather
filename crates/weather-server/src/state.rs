@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use weather_core::{cache::TtlCache, geocode::Place, http::HttpClient, ProviderRegistry};
 
-/// Shared state for the REST API and (later) the MCP server.
+/// Shared state for the REST API and the MCP server.
 #[derive(Clone)]
 pub struct AppState {
     /// Behind a lock because custom providers are added and removed at runtime
@@ -18,6 +18,8 @@ pub struct AppState {
     pub custom_lock: Arc<tokio::sync::Mutex<()>>,
     /// Reverse-geocoding results per ~1 km cell (Nominatim allows 1 req/s).
     pub place_names: Arc<TtlCache<(i32, i32), Option<Place>>>,
+    /// Whether an `OWNER_TOKEN` is configured (reported by /api/health).
+    pub owner_token_required: bool,
 }
 
 impl AppState {
@@ -28,6 +30,7 @@ impl AppState {
             data_dir,
             custom_lock: Arc::default(),
             place_names: Arc::new(TtlCache::new(std::time::Duration::from_secs(24 * 3600), 512)),
+            owner_token_required: false,
         }
     }
 }

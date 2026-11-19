@@ -1,7 +1,7 @@
 use axum::{
     extract::{
         rejection::{JsonRejection, QueryRejection},
-        Query, State,
+        Extension, Query, State,
     },
     http::StatusCode,
     routing::{get, post, put},
@@ -16,7 +16,13 @@ use weather_core::{
     ProviderError, ProviderInfo,
 };
 
-use crate::{custom_store, error::ApiError, service, state::AppState};
+use crate::{
+    auth::{self, Access},
+    custom_store,
+    error::ApiError,
+    service,
+    state::AppState,
+};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -28,8 +34,12 @@ pub fn router() -> Router<AppState> {
         .route("/marine", get(marine))
         .route("/geocode", get(geocode_search))
         .route("/geocode/reverse", get(geocode_reverse))
-        .route("/custom-providers", put(replace_custom_providers))
-        .route("/custom-providers/test", post(test_custom_provider))
+        .merge(
+            Router::new()
+                .route("/custom-providers", put(replace_custom_providers))
+                .route("/custom-providers/test", post(test_custom_provider))
+                .route_layer(axum::middleware::from_fn(auth::require_owner)),
+        )
         // Keeps unknown /api paths from falling through to the web app shell.
         .fallback(not_found)
 }
@@ -72,26 +82,39 @@ fn body<T>(b: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
     b.map(|Json(t)| t).map_err(|e| ApiError::BadRequest(e.body_text()))
 }
 
-async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") }))
+/// `ownerTokenRequired` tells the app whether to ask for the access token;
+/// `owner` whether the token it sent (if any) was accepted.
+async fn health(State(state): State<AppState>, Extension(access): Extension<Access>) -> Json<Value> {
+    Json(json!({
+        "status": "ok",
+        "version": env!("CARGO_PKG_VERSION"),
+        "build": option_env!("WEATHER_BUILD"),
+        "ownerTokenRequired": state.owner_token_required,
+        "owner": access.owner,
+    }))
 }
 
-async fn providers(State(state): State<AppState>) -> Json<Vec<ProviderInfo>> {
+async fn providers(
+    State(state): State<AppState>,
+    Extension(access): Extension<Access>,
+) -> Json<Vec<ProviderInfo>> {
     let registry = state.registry.read().expect("registry lock poisoned");
-    Json(registry.list())
+    Json(registry.list().into_iter().filter(|p| access.may_use(&p.id)).collect())
 }
 
 async fn current(
     State(state): State<AppState>,
+    Extension(access): Extension<Access>,
     q: Result<Query<PointQuery>, QueryRejection>,
 ) -> Result<Json<CurrentConditions>, ApiError> {
     let q = query(q)?;
     let point = GeoPoint::new(q.lat, q.lon);
-    Ok(Json(service::current(&state, point, q.provider.as_deref()).await?))
+    Ok(Json(service::current(&state, access, point, q.provider.as_deref()).await?))
 }
 
 async fn forecast(
     State(state): State<AppState>,
+    Extension(access): Extension<Access>,
     q: Result<Query<ForecastQuery>, QueryRejection>,
 ) -> Result<Json<Forecast>, ApiError> {
     let q = query(q)?;
@@ -102,24 +125,26 @@ async fn forecast(
     };
     let point = GeoPoint::new(q.lat, q.lon);
     Ok(Json(
-        service::forecast(&state, point, range, q.provider.as_deref()).await?,
+        service::forecast(&state, access, point, range, q.provider.as_deref()).await?,
     ))
 }
 
 async fn alerts(
     State(state): State<AppState>,
+    Extension(access): Extension<Access>,
     q: Result<Query<PointQuery>, QueryRejection>,
 ) -> Result<Json<AlertsResponse>, ApiError> {
     let q = query(q)?;
-    Ok(Json(service::alerts(&state, GeoPoint::new(q.lat, q.lon)).await?))
+    Ok(Json(service::alerts(&state, access, GeoPoint::new(q.lat, q.lon)).await?))
 }
 
 async fn marine(
     State(state): State<AppState>,
+    Extension(access): Extension<Access>,
     q: Result<Query<PointQuery>, QueryRejection>,
 ) -> Result<Json<MarineResponse>, ApiError> {
     let q = query(q)?;
-    Ok(Json(service::marine(&state, GeoPoint::new(q.lat, q.lon)).await?))
+    Ok(Json(service::marine(&state, access, GeoPoint::new(q.lat, q.lon)).await?))
 }
 
 async fn geocode_search(
@@ -193,15 +218,67 @@ mod tests {
     /// Router with no providers registered: exercises routing, validation and
     /// error mapping without touching the network.
     async fn get(uri: &str) -> (StatusCode, Value) {
-        let state = AppState::new(ProviderRegistry::new(), weather_core::http::default_client(), None);
-        let app = router().with_state(state);
-        let res = app
-            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
-            .await
-            .unwrap();
+        send(auth::OwnerToken::default(), Request::get(uri).body(Body::empty()).unwrap()).await
+    }
+
+    /// Like the real server: `identify` in front of the API.
+    async fn send(token: auth::OwnerToken, req: Request<Body>) -> (StatusCode, Value) {
+        let mut state = AppState::new(ProviderRegistry::new(), weather_core::http::default_client(), None);
+        state.owner_token_required = token.is_set();
+        let app = router()
+            .with_state(state)
+            .layer(axum::middleware::from_fn_with_state(token, auth::identify));
+        let res = app.oneshot(req).await.unwrap();
         let status = res.status();
         let body = res.into_body().collect().await.unwrap().to_bytes();
         (status, serde_json::from_slice(&body).unwrap())
+    }
+
+    const TOKEN: &str = "0123456789abcdef0123456789abcdef";
+
+    fn put_empty(bearer: Option<&str>) -> Request<Body> {
+        let mut req = Request::put("/custom-providers").header("content-type", "application/json");
+        if let Some(t) = bearer {
+            req = req.header("authorization", format!("Bearer {t}"));
+        }
+        req.body(Body::from("[]")).unwrap()
+    }
+
+    #[tokio::test]
+    async fn without_a_token_everyone_is_owner() {
+        let (status, _) = send(auth::OwnerToken::default(), put_empty(None)).await;
+        assert_eq!(status, 200);
+        let (_, body) = get("/health").await;
+        assert_eq!(body["ownerTokenRequired"], false);
+        assert_eq!(body["owner"], true);
+    }
+
+    #[tokio::test]
+    async fn with_a_token_writes_need_it() {
+        let token = || auth::OwnerToken::new(TOKEN);
+        let (status, body) = send(token(), put_empty(None)).await;
+        assert_eq!(status, 401);
+        assert_eq!(body["code"], "unauthorized");
+
+        let (status, _) = send(token(), put_empty(Some("wrong-token"))).await;
+        assert_eq!(status, 401);
+
+        let (status, _) = send(token(), put_empty(Some(TOKEN))).await;
+        assert_eq!(status, 200);
+    }
+
+    #[tokio::test]
+    async fn with_a_token_visitors_still_read_weather() {
+        let token = auth::OwnerToken::new(TOKEN);
+        let (status, body) = send(token.clone(), Request::get("/health").body(Body::empty()).unwrap()).await;
+        assert_eq!(status, 200);
+        assert_eq!(body["ownerTokenRequired"], true);
+        assert_eq!(body["owner"], false);
+
+        // Reaches the handler (no providers registered, so 422), not a 401.
+        let req = Request::get("/weather/forecast?lat=1&lon=1").body(Body::empty()).unwrap();
+        let (status, _) = send(token, req).await;
+        assert_eq!(status, 422);
     }
 
     #[tokio::test]

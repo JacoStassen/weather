@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api } from '../api/client'
+import { ApiError, api, setOwnerToken as useTokenForRequests } from '../api/client'
 import * as repo from '../db/repo'
 import { getDb } from '../db/client'
 import type { ApiKeyMeta, SavedLocation, StoredCustomProvider } from '../db/repo'
@@ -28,6 +28,17 @@ interface SettingsState {
   /** Providers the server currently knows, including synced custom ones. */
   serverProviders: ProviderInfo[]
   syncError?: string
+
+  /**
+   * Access to a server reachable from the internet. `tokenRequired` false
+   * (a local server) means everything is open and `owner` is true.
+   */
+  server: { tokenRequired: boolean; owner: boolean; tokenRejected: boolean } | null
+  /** Saved owner token, if any. */
+  ownerToken?: string
+  /** Checks the token with the server and saves it if it works. Returns an error message. */
+  saveOwnerToken: (token: string) => Promise<string | undefined>
+  forgetOwnerToken: () => Promise<void>
 
   locating: boolean
   locateError?: string
@@ -71,21 +82,28 @@ export const useSettings = create<SettingsState>()((set, get) => {
     apiKeys: [],
     customProviders: [],
     serverProviders: [],
+    server: null,
     locating: false,
 
     init: async () => {
       try {
         const db = await getDb()
-        const [activeProviderId, units, selectedLocationId] = await Promise.all([
+        const [activeProviderId, units, selectedLocationId, ownerToken] = await Promise.all([
           repo.getSetting<string>('activeProviderId'),
           repo.getSetting<Units>('units'),
           repo.getSetting<string>('selectedLocationId'),
+          repo.getSetting<string>('ownerToken'),
         ])
+        // Before the dashboard's first request: a stale token would get every
+        // request refused. Offline is fine, syncProviders reports it.
+        const server = await checkServer(ownerToken).catch(() => null)
         await reload()
         const { locations } = get()
         set({
           status: 'ready',
           persistent: db.persistent,
+          ownerToken,
+          server,
           activeProviderId: activeProviderId ?? DEFAULT_PROVIDER,
           units: units ?? (navigator.language === 'en-US' ? 'imperial' : 'metric'),
           selectedLocationId: locations.some((l) => l.id === selectedLocationId)
@@ -196,7 +214,11 @@ export const useSettings = create<SettingsState>()((set, get) => {
      */
     syncProviders: async ({ startup = false } = {}) => {
       try {
-        const push = get().persistent && !(startup && get().customProviders.length === 0)
+        const server = await checkServer(get().ownerToken)
+        set({ server })
+        // Without the owner token the server won't take custom sources (and
+        // its copy belongs to whoever has the token): only read.
+        const push = server.owner && get().persistent && !(startup && get().customProviders.length === 0)
         if (push) {
           const configs = await repo.resolveCustomProviders(get().customProviders)
           set({ serverProviders: await api.replaceCustomProviders(configs), syncError: undefined })
@@ -207,8 +229,51 @@ export const useSettings = create<SettingsState>()((set, get) => {
         set({ syncError: err instanceof Error ? err.message : String(err) })
       }
     },
+
+    saveOwnerToken: async (token) => {
+      token = token.trim()
+      const server = await checkServer(token).catch(() => null)
+      if (!server) return 'Couldn’t reach the weather server.'
+      if (!server.tokenRequired) return 'This server doesn’t use an access token.'
+      if (!server.owner) {
+        // Keep using the previous token, if it worked.
+        useTokenForRequests(get().server?.owner ? get().ownerToken : undefined)
+        return 'The server didn’t accept that token.'
+      }
+      await repo.setSetting('ownerToken', token)
+      set({ ownerToken: token })
+      // `startup` semantics: a new device with no sources yet must not wipe
+      // the server's copy.
+      await get().syncProviders({ startup: get().customProviders.length === 0 })
+      return undefined
+    },
+
+    forgetOwnerToken: async () => {
+      await repo.deleteSetting('ownerToken')
+      useTokenForRequests(undefined)
+      set({ ownerToken: undefined })
+      await get().syncProviders({ startup: true })
+    },
   }
 })
+
+/**
+ * Asks the server what this token allows. A rejected token is dropped from
+ * requests, since the server refuses every request that carries a wrong one
+ * and the dashboard would stop working.
+ */
+async function checkServer(token: string | undefined): Promise<NonNullable<SettingsState['server']>> {
+  useTokenForRequests(token)
+  try {
+    const h = await api.health()
+    return { tokenRequired: h.ownerTokenRequired, owner: h.owner, tokenRejected: false }
+  } catch (err) {
+    if (!(err instanceof ApiError && err.status === 401)) throw err
+    useTokenForRequests(undefined)
+    const h = await api.health()
+    return { tokenRequired: h.ownerTokenRequired, owner: h.owner, tokenRejected: true }
+  }
+}
 
 /** Stores the position, named by reverse geocoding when the server can. */
 async function saveDevicePosition(pos: { lat: number; lon: number }): Promise<string> {

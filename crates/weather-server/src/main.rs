@@ -1,3 +1,4 @@
+mod auth;
 mod custom_store;
 mod error;
 mod guard;
@@ -42,11 +43,36 @@ async fn main() -> anyhow::Result<()> {
     registry.register(Arc::new(NwsProvider::new(http.clone())));
 
     let data_dir = PathBuf::from(std::env::var("DATA_DIR").unwrap_or_else(|_| "data".into()));
-    let state = AppState::new(registry, http, Some(data_dir));
+    let mut state = AppState::new(registry, http, Some(data_dir));
     custom_store::load_into(&state);
 
     let shutdown = CancellationToken::new();
     let allowed = guard::AllowedHosts::from_env();
+    let token = auth::OwnerToken::from_env()?;
+    state.owner_token_required = token.is_set();
+
+    // Loopback only by default: this server holds API keys and exposes MCP tools.
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8787);
+    let addr: SocketAddr = format!("{host}:{port}")
+        .parse()
+        .context("invalid HOST/PORT")?;
+
+    // Reachable by others (a public name, or a non-loopback address) means
+    // strangers could rewrite custom sources and use MCP: insist on a token.
+    let exposed = !allowed.extra_hosts().is_empty() || !addr.ip().is_loopback();
+    if exposed && !token.is_set() {
+        anyhow::bail!(
+            "ALLOWED_HOSTS or a non-loopback HOST makes this server reachable by others; \
+             set OWNER_TOKEN too (e.g. OWNER_TOKEN=$(openssl rand -hex 24))"
+        );
+    }
+    if token.is_set() {
+        tracing::info!("owner token set: custom sources and MCP need it");
+    }
 
     // MCP over Streamable HTTP. Host/Origin checks are done by our guard
     // layer for every route; the SDK's own Host check is given the same list.
@@ -62,10 +88,15 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
+    // Everything MCP is owner-only (when a token is set).
+    let mcp_routes = Router::new()
+        .nest_service("/mcp", mcp_http)
+        .merge(mcp::legacy_sse::router(state.clone(), shutdown.child_token()))
+        .layer(middleware::from_fn(auth::require_owner));
+
     let mut app = Router::new()
         .nest("/api", rest::router())
-        .nest_service("/mcp", mcp_http)
-        .merge(mcp::legacy_sse::router(state.clone(), shutdown.child_token()).with_state::<AppState>(()));
+        .merge(mcp_routes.with_state::<AppState>(()));
 
     // In production the server also serves the built PWA, so the app, the API
     // and the MCP endpoint share one origin. In development Vite serves the app
@@ -82,18 +113,9 @@ async fn main() -> anyhow::Result<()> {
 
     let app = app
         .with_state(state)
+        .layer(middleware::from_fn_with_state(token, auth::identify))
         .layer(middleware::from_fn_with_state(allowed, guard::check))
         .layer(TraceLayer::new_for_http());
-
-    // Loopback only by default: this server holds API keys and exposes MCP tools.
-    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(8787);
-    let addr: SocketAddr = format!("{host}:{port}")
-        .parse()
-        .context("invalid HOST/PORT")?;
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

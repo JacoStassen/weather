@@ -1,0 +1,141 @@
+name: CI
+
+# Every push and pull request is tested. Each push to master also builds a
+# release for the server (Linux, Arm64) and, if DEPLOY_HOST is set, deploys it.
+# See docs/DEPLOYMENT.md.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# A newer push to a pull request replaces the older run. Runs on master are
+# never cancelled, so a deploy is not interrupted half-way.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --locked
+
+      # The tests regenerate the TypeScript types from the Rust ones.
+      - name: TypeScript types match the Rust types
+        run: |
+          node web/scripts/types-index.mjs
+          git diff --exit-code -- web/src/types || {
+            echo "::error::web/src/types is out of date: run 'npm run types' and commit the result"
+            exit 1
+          }
+
+      - name: Web app (typecheck and build)
+        run: npm -w web run build
+
+  release:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    # Same architecture and Ubuntu release as the Oracle Ampere server.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.package.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm -w web run build
+
+      - name: Server binary
+        run: cargo build --release --locked -p weather-server
+        env:
+          # Shown by /api/health, so you can see which commit is running.
+          WEATHER_BUILD: ${{ github.sha }}
+
+      - name: Package
+        id: package
+        run: |
+          tag="build-${{ github.run_number }}"
+          mkdir -p pkg
+          cp target/release/weather-server pkg/
+          cp -r web/dist pkg/web
+          printf '%s %s\n' "$tag" "${GITHUB_SHA::7}" > pkg/BUILD
+          tar -C pkg -czf weather-linux-arm64.tar.gz .
+          sha256sum weather-linux-arm64.tar.gz > weather-linux-arm64.tar.gz.sha256
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.package.outputs.tag }}"
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "$tag (${GITHUB_SHA::7})" \
+            --notes "Server build of ${GITHUB_SHA::7}. Install with deploy/update.sh; see docs/DEPLOYMENT.md." \
+            --latest \
+            weather-linux-arm64.tar.gz weather-linux-arm64.tar.gz.sha256
+
+      # Keep the ten newest builds; the server keeps its own three.
+      - name: Prune old releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 200 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("build-"))] | sort_by(.createdAt) | reverse | .[10:] | .[].tagName' |
+          while read -r old; do
+            gh release delete "$old" --cleanup-tag --yes
+          done
+
+  deploy:
+    needs: release
+    # Skipped until the DEPLOY_HOST variable is set (docs/DEPLOYMENT.md).
+    if: vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Install the new release on the server
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy
+          # The key may only run weather-update on the server (forced command),
+          # which installs the release named here.
+          ssh -i ~/.ssh/deploy "${{ vars.DEPLOY_USER || 'ubuntu' }}@${{ vars.DEPLOY_HOST }}" "${{ needs.release.outputs.tag }}"

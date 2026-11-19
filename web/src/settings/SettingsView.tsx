@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Database, Eye, EyeOff, KeyRound, MapPin, Pencil, Plus, Ruler, Server, Trash2, Waypoints } from 'lucide-react'
+import { Database, Eye, EyeOff, KeyRound, LockKeyhole, MapPin, Pencil, Plus, Ruler, Server, Trash2, Waypoints } from 'lucide-react'
 import { DEFAULT_PROVIDER, useSettings, type Units } from '../store/settings'
 import type { StoredCustomProvider } from '../db/repo'
 import type { Capability } from '../types'
@@ -15,6 +15,7 @@ export function SettingsView() {
       <main className="mx-auto mt-2 max-w-2xl space-y-4">
         <h1 className="text-2xl font-semibold">Settings</h1>
         <StorageNotice />
+        <ServerAccess />
         <DataSource />
         <UnitsSection />
         <Locations />
@@ -35,6 +36,82 @@ function StorageNotice() {
       )}
       {syncError && <ErrorNote message={`Couldn’t reach the weather server: ${syncError}`} />}
     </>
+  )
+}
+
+/**
+ * Only on a server reachable from the internet. The token unlocks custom
+ * sources here and is the same one MCP clients use.
+ */
+function ServerAccess() {
+  const server = useSettings((s) => s.server)
+  const saved = useSettings((s) => s.ownerToken)
+  const save = useSettings((s) => s.saveOwnerToken)
+  const forget = useSettings((s) => s.forgetOwnerToken)
+  const [token, setToken] = useState('')
+  const [show, setShow] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+
+  if (!server?.tokenRequired) return null
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    const err = await save(token)
+    setBusy(false)
+    setError(err)
+    if (!err) setToken('')
+  }
+
+  return (
+    <Card title="Server access" icon={LockKeyhole}>
+      {server.owner ? (
+        <div className="flex items-center gap-3">
+          <p className="flex-1 text-sm text-slate-600 dark:text-slate-300">
+            This device has the server’s access token, so your custom sources work here and are kept on the server for MCP clients.
+          </p>
+          {saved && (
+            <button type="button" className={`${buttonClass.secondary} text-sm`} onClick={() => void forget()}>
+              Forget token
+            </button>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            This server is shared, so custom sources (and the API keys they use) need its access token. The forecast works without it.
+          </p>
+          {server.tokenRejected && <ErrorNote message="The saved access token no longer works. Enter the current one." />}
+          <div className="flex gap-2">
+            <label className="relative min-w-0 flex-1">
+              <span className="sr-only">Access token</span>
+              <input
+                type={show ? 'text' : 'password'}
+                className={`${inputClass} pr-10 font-mono`}
+                placeholder="Access token"
+                autoComplete="off"
+                spellCheck={false}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600"
+                aria-label={show ? 'Hide token' : 'Show token'}
+                onClick={() => setShow(!show)}
+              >
+                {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </label>
+            <button type="submit" className={buttonClass.primary} disabled={busy || token.trim().length === 0}>
+              {busy ? 'Checking…' : 'Save'}
+            </button>
+          </div>
+          {error && <ErrorNote message={error} />}
+        </form>
+      )}
+    </Card>
   )
 }
 
@@ -178,6 +255,7 @@ function CustomSources() {
   const keys = useSettings((s) => s.apiKeys)
   const remove = useSettings((s) => s.removeCustomProvider)
   const [editing, setEditing] = useState<StoredCustomProvider | 'new' | null>(null)
+  const locked = useSettings((s) => s.server?.tokenRequired && !s.server.owner)
 
   return (
     <Card
@@ -191,6 +269,9 @@ function CustomSources() {
         )
       }
     >
+      {locked && !editing && (
+        <p className="mb-3 text-sm text-amber-700 dark:text-amber-400">Enter the server’s access token above to use custom sources.</p>
+      )}
       {editing ? (
         <CustomProviderEditor existing={editing === 'new' ? undefined : editing} onDone={() => setEditing(null)} />
       ) : providers.length === 0 ? (

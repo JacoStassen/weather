@@ -19,12 +19,27 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The server's owner token (only set on a server reachable from the
+ * internet). Sent with every request: it unlocks custom sources.
+ */
+let ownerToken: string | undefined
+
+export function setOwnerToken(token: string | undefined) {
+  ownerToken = token || undefined
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
     res = await fetch(`/api${path}`, {
       ...init,
-      headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+      headers: {
+        Accept: 'application/json',
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(ownerToken ? { Authorization: `Bearer ${ownerToken}` } : {}),
+        ...init?.headers,
+      },
     })
   } catch {
     throw new ApiError(0, 'offline', 'Cannot reach the weather server')
@@ -45,6 +60,12 @@ function qs(params: Record<string, string | number | null | undefined>): string 
 export interface Health {
   status: string
   version: string
+  /** Commit the server was built from (release builds only). */
+  build: string | null
+  /** The server has an owner token: custom sources and MCP need it. */
+  ownerTokenRequired: boolean
+  /** The token sent with this request (if any) was accepted. */
+  owner: boolean
 }
 
 export interface Point {

@@ -46,6 +46,11 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
   )
 }
 
+export async function deleteSetting(key: string): Promise<void> {
+  const db = await getDb()
+  await db.query('DELETE FROM settings WHERE key = ?', [key])
+}
+
 // ---- locations -------------------------------------------------------------
 
 export async function listLocations(): Promise<SavedLocation[]> {

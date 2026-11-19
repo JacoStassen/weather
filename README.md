@@ -23,6 +23,8 @@ npm run build && npm start
 
 Other scripts: `npm test` (Rust tests + TS typecheck), `npm run types` (regenerate `web/src/types` from the Rust types).
 
+Hosting on a server (Caddy, systemd, GitHub releases, automatic deploys): see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## MCP server
 
 | Transport | URL |
@@ -51,6 +53,12 @@ claude mcp add --transport http weather http://127.0.0.1:8787/mcp
 
 Other clients: point them at the URL above; use `/sse` for clients that only support the older SSE transport.
 
+On a server with an owner token (see below), MCP clients send it as a header:
+
+```bash
+claude mcp add --transport http weather https://weather.example.org/mcp --header "Authorization: Bearer <token>"
+```
+
 Custom sources configured in the app are available to agents too (as `custom:<id>`), even while the app is closed: the server keeps a copy in `data/custom-providers.json` (owner-only permissions).
 
 ## Configuration
@@ -59,6 +67,7 @@ Custom sources configured in the app are available to agents too (as `custom:<id
 |---|---|---|
 | `HOST` / `PORT` | `127.0.0.1` / `8787` | Listen address. Keep it on loopback unless you know you need otherwise. |
 | `ALLOWED_HOSTS` | – | Extra host names to accept (comma-separated). All requests whose `Host` or `Origin` isn't local are rejected, to stop other websites reaching the server via DNS rebinding. |
+| `OWNER_TOKEN` | – | Required once the server is reachable by others (`ALLOWED_HOSTS` or a non-loopback `HOST`); at least 24 characters. Then custom sources and MCP need `Authorization: Bearer <token>`, and everyone else gets the dashboard with the built-in sources. The app asks for it under Settings → Server access. |
 | `DATA_DIR` | `data` | Where the server keeps custom sources. |
 | `WEB_DIST` | `web/dist` | Built app to serve. |
 | `RUST_LOG` | `weather_server=info,tower_http=info` | Log filter. |
