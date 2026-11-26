@@ -3,6 +3,7 @@ import { useSettings } from './store/settings'
 import { Dashboard } from './dashboard/Dashboard'
 import { SettingsView } from './settings/SettingsView'
 import { ErrorNote, Spinner } from './components/ui'
+import { Backdrop } from './components/Ambience'
 
 function useHashRoute(): 'dashboard' | 'settings' {
   const hash = useSyncExternalStore(
@@ -33,6 +34,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-10">
+      <Backdrop />
       {status === 'loading' && (
         <div className="flex h-[60vh] items-center justify-center">
           <Spinner className="size-8" />

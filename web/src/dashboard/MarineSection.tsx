@@ -34,10 +34,10 @@ export function MarineSection({
   }
   return (
     <>
-      <div className="min-w-0 lg:col-span-2">
+      <div className="min-w-0 lg:col-span-2 *:h-full">
         <TidesCard tides={report.tides} units={units} timeZone={timeZone} now={now} />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 *:h-full">
         <WavesCard report={report} units={units} timeZone={timeZone} now={now} />
       </div>
     </>

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Database, Eye, EyeOff, KeyRound, LockKeyhole, MapPin, Pencil, Plus, Ruler, Server, Trash2, Waypoints } from 'lucide-react'
+import { Database, Eye, Palette, EyeOff, KeyRound, LockKeyhole, MapPin, Pencil, Plus, Ruler, Server, Trash2, Waypoints } from 'lucide-react'
 import { DEFAULT_PROVIDER, useSettings, type Units } from '../store/settings'
 import type { StoredCustomProvider } from '../db/repo'
 import type { Capability } from '../types'
@@ -18,6 +18,7 @@ export function SettingsView() {
         <ServerAccess />
         <DataSource />
         <UnitsSection />
+        <Appearance />
         <Locations />
         <CustomSources />
         <ApiKeys />
@@ -173,6 +174,63 @@ function DataSource() {
         )}
       </div>
     </Card>
+  )
+}
+
+function Appearance() {
+  const weatherThemes = useSettings((s) => s.weatherThemes)
+  const animations = useSettings((s) => s.animations)
+  const setWeatherThemes = useSettings((s) => s.setWeatherThemes)
+  const setAnimations = useSettings((s) => s.setAnimations)
+  return (
+    <Card title="Appearance" icon={Palette}>
+      <div className="divide-y divide-slate-200 dark:divide-slate-800">
+        <Toggle
+          label="Weather themes"
+          detail="Colours follow the weather: warm on sunny days, grey-blue when it rains, starry at night."
+          checked={weatherThemes}
+          onChange={(on) => void setWeatherThemes(on)}
+        />
+        <Toggle
+          label="Animations"
+          detail="Gentle motion such as drifting clouds, falling rain and a turning sun. Starts off when your device asks for reduced motion."
+          checked={animations}
+          onChange={(on) => void setAnimations(on)}
+        />
+      </div>
+    </Card>
+  )
+}
+
+function Toggle({
+  label,
+  detail,
+  checked,
+  onChange,
+}: {
+  label: string
+  detail: string
+  checked: boolean
+  onChange: (on: boolean) => void
+}) {
+  return (
+    <label className="flex cursor-pointer items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <span>
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="block text-xs text-slate-500 dark:text-slate-400">{detail}</span>
+      </span>
+      <span className="relative mt-0.5 inline-flex shrink-0">
+        <input
+          type="checkbox"
+          role="switch"
+          className="peer sr-only"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-sky-600 peer-focus-visible:ring-2 peer-focus-visible:ring-sky-500/50 dark:bg-slate-700 dark:peer-checked:bg-sky-500" />
+        <span className="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+      </span>
+    </label>
   )
 }
 

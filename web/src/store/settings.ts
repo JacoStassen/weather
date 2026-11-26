@@ -20,6 +20,10 @@ interface SettingsState {
 
   activeProviderId: string
   units: Units
+  /** Colours follow the weather (sunny, rainy…). Off: the plain blue look. */
+  weatherThemes: boolean
+  /** Moving effects (rain, drifting clouds…). Defaults to off when the device asks for reduced motion. */
+  animations: boolean
   selectedLocationId: string | null
   locations: SavedLocation[]
   apiKeys: ApiKeyMeta[]
@@ -51,6 +55,8 @@ interface SettingsState {
   init: () => Promise<void>
   setActiveProvider: (id: string) => Promise<void>
   setUnits: (u: Units) => Promise<void>
+  setWeatherThemes: (on: boolean) => Promise<void>
+  setAnimations: (on: boolean) => Promise<void>
   selectLocation: (id: string) => Promise<void>
   addLocation: (place: Place) => Promise<void>
   removeLocation: (id: string) => Promise<void>
@@ -59,6 +65,10 @@ interface SettingsState {
   saveCustomProvider: (p: StoredCustomProvider, previousSlug?: string) => Promise<void>
   removeCustomProvider: (slug: string) => Promise<void>
   syncProviders: (opts?: { startup?: boolean }) => Promise<void>
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 export const useSettings = create<SettingsState>()((set, get) => {
@@ -77,6 +87,8 @@ export const useSettings = create<SettingsState>()((set, get) => {
     persistent: false,
     activeProviderId: DEFAULT_PROVIDER,
     units: 'metric',
+    weatherThemes: true,
+    animations: !prefersReducedMotion(),
     selectedLocationId: null,
     locations: [],
     apiKeys: [],
@@ -88,11 +100,13 @@ export const useSettings = create<SettingsState>()((set, get) => {
     init: async () => {
       try {
         const db = await getDb()
-        const [activeProviderId, units, selectedLocationId, ownerToken] = await Promise.all([
+        const [activeProviderId, units, selectedLocationId, ownerToken, weatherThemes, animations] = await Promise.all([
           repo.getSetting<string>('activeProviderId'),
           repo.getSetting<Units>('units'),
           repo.getSetting<string>('selectedLocationId'),
           repo.getSetting<string>('ownerToken'),
+          repo.getSetting<boolean>('weatherThemes'),
+          repo.getSetting<boolean>('animations'),
         ])
         // Before the dashboard's first request: a stale token would get every
         // request refused. Offline is fine, syncProviders reports it.
@@ -106,6 +120,8 @@ export const useSettings = create<SettingsState>()((set, get) => {
           server,
           activeProviderId: activeProviderId ?? DEFAULT_PROVIDER,
           units: units ?? (navigator.language === 'en-US' ? 'imperial' : 'metric'),
+          weatherThemes: weatherThemes ?? true,
+          animations: animations ?? !prefersReducedMotion(),
           selectedLocationId: locations.some((l) => l.id === selectedLocationId)
             ? selectedLocationId!
             : (locations[0]?.id ?? null),
@@ -125,6 +141,16 @@ export const useSettings = create<SettingsState>()((set, get) => {
     setUnits: async (units) => {
       set({ units })
       await repo.setSetting('units', units)
+    },
+
+    setWeatherThemes: async (weatherThemes) => {
+      set({ weatherThemes })
+      await repo.setSetting('weatherThemes', weatherThemes)
+    },
+
+    setAnimations: async (animations) => {
+      set({ animations })
+      await repo.setSetting('animations', animations)
     },
 
     selectLocation: async (id) => {

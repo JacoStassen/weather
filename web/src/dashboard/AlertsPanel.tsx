@@ -28,8 +28,8 @@ export function AlertsPanel({ alerts, timeZone }: { alerts: Loadable<AlertsRespo
         </p>
       )}
       {a && a.coverage && count === 0 && (
-        <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-          <ShieldCheck className="size-4" aria-hidden />
+        <p className="flex items-start gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+          <ShieldCheck className="size-5 shrink-0" aria-hidden />
           No active watches, warnings or advisories{a.providerId && ISSUER[a.providerId] ? ` from ${ISSUER[a.providerId]}` : ''}.
         </p>
       )}

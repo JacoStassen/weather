@@ -66,13 +66,14 @@ export function Dashboard() {
       {!location ? (
         <FirstLocation />
       ) : (
-        <main className="mt-2 grid gap-4 lg:grid-cols-3">
+        <main className="wx-rise mt-2 grid gap-4 lg:grid-cols-3">
           {hasAlerts && (
             <div className="lg:col-span-3">
               <AlertsPanel alerts={alerts} timeZone={forecast.data?.timezone} />
             </div>
           )}
-          <div className="lg:col-span-2">
+          {/* Cards stretch to the tallest one in their row, so the edges line up. */}
+          <div className="lg:col-span-2 *:h-full">
             <CurrentCard
               current={current}
               today={forecast.data?.daily[0]}
@@ -80,7 +81,7 @@ export function Dashboard() {
               providerName={providerName}
             />
           </div>
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 *:last:grow">
             {!hasAlerts && <AlertsPanel alerts={alerts} timeZone={forecast.data?.timezone} />}
             <TodayCard forecast={forecast} units={units} />
           </div>
@@ -88,7 +89,7 @@ export function Dashboard() {
             <HourlyStrip forecast={forecast} units={units} />
           </div>
           <MarineSection marine={marine} units={units} timeZone={forecast.data?.timezone} />
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <DailyList forecast={forecast} units={units} />
           </div>
         </main>
