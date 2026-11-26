@@ -28,6 +28,15 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
     provider: &str,
     req: RequestBuilder,
 ) -> Result<T, ProviderError> {
+    let body = get_bytes(provider, req).await?;
+    serde_json::from_slice(&body).map_err(|e| ProviderError::BadResponse {
+        provider: provider.to_owned(),
+        message: format!("could not parse response: {e}"),
+    })
+}
+
+/// Sends `req` and returns the body, mapping HTTP failures to [`ProviderError`].
+pub(crate) async fn get_bytes(provider: &str, req: RequestBuilder) -> Result<bytes::Bytes, ProviderError> {
     let network = |e: reqwest::Error| ProviderError::Network {
         provider: provider.to_owned(),
         message: describe(e),
@@ -61,10 +70,7 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
         });
     }
 
-    serde_json::from_slice(&body).map_err(|e| ProviderError::BadResponse {
-        provider: provider.to_owned(),
-        message: format!("could not parse response: {e}"),
-    })
+    Ok(body)
 }
 
 /// Error text without the request URL, which may carry an API key.

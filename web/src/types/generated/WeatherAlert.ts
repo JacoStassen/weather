@@ -2,4 +2,9 @@
 import type { Severity } from "./Severity";
 import type { SourceMeta } from "./SourceMeta";
 
-export type WeatherAlert = { id: string, event: string, severity: Severity, headline: string, description: string, instruction: string | null, effective: string, expires: string | null, areaDesc: string, source: SourceMeta, };
+export type WeatherAlert = { id: string, event: string, severity: Severity, headline: string, description: string, instruction: string | null, effective: string, expires: string | null, areaDesc: string, 
+/**
+ * The issuer's own warning level, e.g. "Warning Level 4" (South African
+ * Weather Service impact-based warnings). `None` when it has none.
+ */
+level: string | null, source: SourceMeta, };

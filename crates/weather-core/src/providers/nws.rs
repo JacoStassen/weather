@@ -156,6 +156,7 @@ fn normalize(c: NwsCollection, fetched_at: DateTime<Utc>) -> Vec<WeatherAlert> {
                 id: a.id,
                 event: a.event,
                 area_desc: a.area_desc,
+                level: None,
                 source: SourceMeta {
                     provider_id: ID.to_owned(),
                     fetched_at,

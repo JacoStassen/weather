@@ -6,6 +6,12 @@ import { SEVERITY_STYLE } from '../lib/conditions'
 import { dateTime } from '../lib/format'
 import { Card, ErrorNote, Skeleton } from '../components/ui'
 
+/** Alert providers by id, for "No active warnings from …". */
+const ISSUER: Record<string, string> = {
+  nws: 'the National Weather Service',
+  saws: 'the South African Weather Service',
+}
+
 export function AlertsPanel({ alerts, timeZone }: { alerts: Loadable<AlertsResponse>; timeZone?: string }) {
   const a = alerts.data
   const count = a?.alerts.length ?? 0
@@ -17,13 +23,14 @@ export function AlertsPanel({ alerts, timeZone }: { alerts: Loadable<AlertsRespo
       {a && !a.coverage && (
         <p className="flex items-start gap-2 text-sm text-slate-500 dark:text-slate-400">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Severe weather alerts are only available for US locations (National Weather Service).
+          Severe weather alerts are only available for the US (National Weather Service) and South Africa (South African Weather
+          Service).
         </p>
       )}
       {a && a.coverage && count === 0 && (
         <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
           <ShieldCheck className="size-4" aria-hidden />
-          No active watches, warnings or advisories.
+          No active watches, warnings or advisories{a.providerId && ISSUER[a.providerId] ? ` from ${ISSUER[a.providerId]}` : ''}.
         </p>
       )}
       {count > 0 && (
@@ -33,6 +40,9 @@ export function AlertsPanel({ alerts, timeZone }: { alerts: Loadable<AlertsRespo
           ))}
         </ul>
       )}
+      {count > 0 && a!.providerId && ISSUER[a!.providerId] && (
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Issued by {ISSUER[a!.providerId]}.</p>
+      )}
     </Card>
   )
 }
@@ -40,6 +50,13 @@ export function AlertsPanel({ alerts, timeZone }: { alerts: Loadable<AlertsRespo
 function AlertItem({ alert, timeZone }: { alert: WeatherAlert; timeZone?: string }) {
   const [open, setOpen] = useState(false)
   const style = SEVERITY_STYLE[alert.severity]
+  // Warnings issued ahead (South Africa warns for the next days too).
+  const upcoming = Date.parse(alert.effective) > Date.now()
+  const when = upcoming
+    ? `From ${dateTime(alert.effective, timeZone)}${alert.expires ? ` until ${dateTime(alert.expires, timeZone)}` : ''}`
+    : alert.expires
+      ? `Until ${dateTime(alert.expires, timeZone)}`
+      : `Since ${dateTime(alert.effective, timeZone)}`
   return (
     <li className={`rounded-xl border ${style.border}`}>
       <button
@@ -52,9 +69,12 @@ function AlertItem({ alert, timeZone }: { alert: WeatherAlert; timeZone?: string
           {style.label}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold">{alert.event}</span>
+          <span className="block font-semibold">
+            {alert.event}
+            {alert.level && <span className="ml-2 text-xs font-medium text-slate-500 dark:text-slate-400">{alert.level.replace(/^Warning /, '')}</span>}
+          </span>
           <span className="block text-xs text-slate-500 dark:text-slate-400">
-            {alert.expires ? `Until ${dateTime(alert.expires, timeZone)}` : `Since ${dateTime(alert.effective, timeZone)}`}
+            {when}
             {' · '}
             {alert.areaDesc}
           </span>

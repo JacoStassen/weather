@@ -13,6 +13,9 @@ serde_json.workspace = true
 schemars = { version = "1", features = ["chrono04"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 thiserror.workspace = true
+bytes = "1"
+futures = "0.3"
+quick-xml = { version = "0.38", features = ["serialize"] }
 ts-rs = { version = "10", features = ["chrono-impl", "serde-json-impl"] }
 
 [dev-dependencies]

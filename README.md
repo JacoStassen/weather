@@ -4,7 +4,7 @@ A local-first weather dashboard (installable PWA) and an MCP server that gives A
 
 - **Web app** (`web/`): React + Vite + Tailwind. Settings, saved places, API keys and custom sources live in SQLite (WASM, stored in the browser's private file system).
 - **Server** (`crates/weather-server`): Rust + Axum. REST API for the app, MCP for agents, and in production it also serves the built app.
-- **Core** (`crates/weather-core`): the `WeatherProvider` trait, normalized types (exported to TypeScript), and the providers: Open-Meteo (weather, marine, tides), NWS (US alerts) and user-defined custom sources.
+- **Core** (`crates/weather-core`): the `WeatherProvider` trait, normalized types (exported to TypeScript), and the providers: Open-Meteo (weather, marine, tides), NWS (US alerts), the South African Weather Service (SA warnings) and user-defined custom sources.
 
 ## Run it
 
@@ -37,7 +37,7 @@ Tools:
 | Tool | Arguments | Returns |
 |---|---|---|
 | `get_current_weather` | `lat`, `lon`, `provider?` | current conditions |
-| `get_severe_alerts` | `lat`, `lon` | active alerts; `coverage: false` outside the US |
+| `get_severe_alerts` | `lat`, `lon` | active and upcoming alerts; `coverage: false` outside the US and South Africa |
 | `get_marine_tides` | `lat`, `lon` | upcoming high/low tides, waves now, 24 h wave outlook; `coastal: false` inland |
 | `get_forecast` | `lat`, `lon`, `hours?`, `days?`, `provider?` | hourly + daily forecast |
 | `search_places` | `query`, `limit?` | places with coordinates |
@@ -81,5 +81,5 @@ Custom sources configured in the app are available to agents too (as `custom:<id
 
 - Place names for "my location": © OpenStreetMap contributors (Nominatim; at most 1 request/s, cached per ~1 km for a day).
 - Tides are modeled from Open-Meteo sea-level data, not tide-station predictions. Not for navigation.
-- Severe weather alerts come from the US National Weather Service only.
+- Severe weather alerts come from the US National Weather Service and the South African Weather Service (its public warnings feed, matched to your municipality). Elsewhere the app says it has no alert data rather than "no alerts".
 - Only one browser tab at a time can save settings; others run on a temporary in-memory copy and say so.

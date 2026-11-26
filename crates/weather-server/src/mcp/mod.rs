@@ -25,8 +25,9 @@ const INSTRUCTIONS: &str = "Weather data for any location, by latitude/longitude
 If you only have a place name, call search_places first to get coordinates. \
 Temperatures are °C, wind m/s, pressure hPa, precipitation mm, heights m; \
 timestamps are RFC 3339 in the location's local offset. \
-Severe weather alerts cover the US only: check `coverage` before telling the user \
-there are no alerts. Tides are modeled, not station predictions, and must not be \
+Severe weather alerts cover the US (National Weather Service) and South Africa \
+(South African Weather Service) only: check `coverage` before telling the user there \
+are no alerts. Tides are modeled, not station predictions, and must not be \
 used for navigation.";
 
 #[derive(Clone)]
@@ -158,7 +159,7 @@ impl WeatherMcp {
     }
 
     #[tool(
-        description = "Active severe weather watches, warnings and advisories at a location, most severe first. US only (National Weather Service): when `coverage` is false, no alert data exists for the location, which does not mean it is safe.",
+        description = "Active severe weather watches, warnings and advisories at a location, most severe first, including ones issued ahead for the coming days (see `effective`). Covers the US (National Weather Service) and South Africa (South African Weather Service; `level` is its impact-based warning level). When `coverage` is false, no alert data exists for the location, which does not mean it is safe.",
         annotations(title = "Severe weather alerts", read_only_hint = true, open_world_hint = true)
     )]
     async fn get_severe_alerts(&self, Parameters(a): Parameters<PointArgs>) -> Result<Json<AlertsResponse>, CallToolResult> {

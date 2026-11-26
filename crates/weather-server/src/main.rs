@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 use weather_core::{
     http::default_client,
-    providers::{open_meteo, NwsProvider, OpenMeteoProvider},
+    providers::{open_meteo, NwsProvider, OpenMeteoProvider, SawsProvider},
     ProviderRegistry,
 };
 
@@ -41,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
     let mut registry = ProviderRegistry::new().with_fallback(open_meteo::ID);
     registry.register(Arc::new(OpenMeteoProvider::new(http.clone())));
     registry.register(Arc::new(NwsProvider::new(http.clone())));
+    registry.register(Arc::new(SawsProvider::new(http.clone())));
 
     let data_dir = PathBuf::from(std::env::var("DATA_DIR").unwrap_or_else(|_| "data".into()));
     let mut state = AppState::new(registry, http, Some(data_dir));

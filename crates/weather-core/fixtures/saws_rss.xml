@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:a10="http://www.w3.org/2005/Atom" version="2.0">
+  <channel>
+    <title>Latest alerts from South Africa Weather Service</title>
+    <link>http://caps.weathersa.co.za/Home/RssFeed</link>
+    <description>Welcome to the South African Weather Service RSS Feed for Weather Warning Alerts</description>
+    <language>en</language>
+    <copyright>Public Domain</copyright>
+    <lastBuildDate>Thu, 26 Nov 2026 00:00:00 +0200</lastBuildDate>
+    <item>
+      <guid isPermaLink="true">http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_125636.xml</guid>
+      <link>http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_125636.xml</link>
+      <title> Severe Thunderstorms</title>
+      <description>Damages to properties and settlements (formal and informal) due to wind and hail.
+Flooding of low-water bridges, roads and susceptible settlements.
+Disruptions to power supply and communications.</description>
+      <pubDate>Wed, 25 Nov 2026 12:56:27 +0200</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="true">http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_125636.xml</guid>
+      <link>http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_125636.xml</link>
+      <title> Severe Thunderstorms</title>
+      <description>Damages to properties and settlements (formal and informal) due to wind and hail.
+Flooding of low-water bridges, roads and susceptible settlements.
+Disruptions to power supply and communications.</description>
+      <pubDate>Wed, 25 Nov 2026 12:56:27 +0200</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="true">http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_070805.xml</guid>
+      <link>http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_070805.xml</link>
+      <title> Severe Thunderstorms</title>
+      <description>Damages to properties and settlements (formal and informal) due to wind and hail.
+Flooding of low-water bridges, roads and susceptible settlements.
+Disruptions to power supply and communications.</description>
+      <pubDate>Wed, 25 Nov 2026 07:07:57 +0200</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="true">http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_070805.xml</guid>
+      <link>http://www.weathersa.co.za/Documents/Warnings/GP_CAP_SevereThunderstorms_20261125_070805.xml</link>
+      <title> Severe Thunderstorms</title>
+      <description>Damages to properties and settlements (formal and informal) due to wind and hail.
+Flooding of low-water bridges, roads and susceptible settlements.
+Disruptions to power supply and communications.</description>
+      <pubDate>Wed, 25 Nov 2026 07:07:57 +0200</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="true">http://www.weathersa.co.za/Documents/Warnings/FS_CAP_SevereThunderstorms_20261124_120347.xml</guid>
+      <link>http://www.weathersa.co.za/Documents/Warnings/FS_CAP_SevereThunderstorms_20261124_120347.xml</link>
+      <title> Severe Thunderstorms</title>
+      <description>Flooding of roads, settlements and low-lying areas.
+Structural damages to settlements due to strong winds.
+Disruption to municipal and other essential services. 
+</description>
+      <pubDate>Tue, 24 Nov 2026 12:03:08 +0200</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="true">http://www.weathersa.co.za/Documents/Warnings/FS_CAP_SevereThunderstorms_20261124_120347.xml</guid>
+      <link>http://www.weathersa.co.za/Documents/Warnings/FS_CAP_SevereThunderstorms_20261124_120347.xml</link>
+      <title> Severe Thunderstorms</title>
+      <description>Localised damage to infrastructure, settlements (informal), properties, vehicles and livelihood
+Localised flooding of susceptible roads and bridges.
+Localised and short term disruption to power supply and communication.
+</description>
+      <pubDate>Tue, 24 Nov 2026 12:03:08 +0200</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="true">http://www.weathersa.co.za/Documents/Warnings/EC_CAP_DamagingWinds_20250509_084516.xml</guid>
+      <link>http://www.weathersa.co.za/Documents/Warnings/EC_CAP_DamagingWinds_20250509_084516.xml</link>
+      <title> Damaging Winds</title>
+      <description>Localised runaway fires.
+Localised damage to settlements both formal and informal.  
+Localised power and communication interruptions.
+Localised problems for high-sided vehicles on prone routes due to cross winds on exposed high level roads/bridges.
+Localised disruption of small harbours and/or a port for a short period of time.
+
+
+</description>
+      <pubDate>Fri, 09 May 2025 08:44:21 +0200</pubDate>
+    </item>
+  </channel>
+</rss>

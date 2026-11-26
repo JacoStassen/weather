@@ -132,8 +132,8 @@ function DataSource() {
   return (
     <Card title="Data source" icon={Server}>
       <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-        Used for current conditions and, where it provides them, forecasts. Anything it doesn’t cover comes from Open-Meteo, and US
-        alerts always come from the National Weather Service.
+        Used for current conditions and, where it provides them, forecasts. Anything it doesn’t cover comes from Open-Meteo. Severe
+        weather alerts always come from the National Weather Service (US) or the South African Weather Service.
       </p>
       <div className="space-y-2" role="radiogroup" aria-label="Data source">
         {selectable.map((p) => (

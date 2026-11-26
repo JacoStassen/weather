@@ -172,6 +172,10 @@ pub struct WeatherAlert {
     pub effective: DateTime<FixedOffset>,
     pub expires: Option<DateTime<FixedOffset>>,
     pub area_desc: String,
+    /// The issuer's own warning level, e.g. "Warning Level 4" (South African
+    /// Weather Service impact-based warnings). `None` when it has none.
+    #[serde(default)]
+    pub level: Option<String>,
     pub source: SourceMeta,
 }
 
