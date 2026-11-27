@@ -4,7 +4,7 @@ A local-first weather dashboard (installable PWA) and an MCP server that gives A
 
 - **Web app** (`web/`): React + Vite + Tailwind. Settings, saved places, API keys and custom sources live in SQLite (WASM, stored in the browser's private file system).
 - **Server** (`crates/weather-server`): Rust + Axum. REST API for the app, MCP for agents, and in production it also serves the built app.
-- **Core** (`crates/weather-core`): the `WeatherProvider` trait, normalized types (exported to TypeScript), and the providers: Open-Meteo (weather, marine, tides), NWS (US alerts), the South African Weather Service (SA warnings) and user-defined custom sources.
+- **Core** (`crates/weather-core`): the `WeatherProvider` trait, normalized types (exported to TypeScript), and the providers: Open-Meteo (weather, marine, tides, plus the ECMWF, GFS, ICON, UK Met Office and GEM models as sources of their own), Yr (MET Norway, CC BY 4.0; Settings compares all forecast sources side by side), NWS (US alerts), the South African Weather Service (SA warnings) and user-defined custom sources.
 
 ## Run it
 

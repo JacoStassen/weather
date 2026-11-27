@@ -1,4 +1,8 @@
 //! Open-Meteo (<https://open-meteo.com>): global forecasts and marine data, no API key.
+//!
+//! The default provider blends the best models for each place. Open-Meteo also
+//! serves the individual national weather models, which are registered as
+//! sources of their own ([`MODELS`]) so they can be picked and compared.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +27,56 @@ const CAPABILITIES: &[Capability] = &[
     Capability::Hourly,
     Capability::Daily,
     Capability::Marine,
+];
+/// A single model: marine data isn't model-specific, it comes from the default.
+const MODEL_CAPABILITIES: &[Capability] = &[Capability::Current, Capability::Hourly, Capability::Daily];
+
+/// A weather model served by Open-Meteo, offered as a source of its own.
+pub struct Model {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub description: &'static str,
+    /// Open-Meteo's `models` parameter.
+    pub model: &'static str,
+}
+
+/// Global models with full coverage (checked for Southern Africa, Europe and the US).
+pub const MODELS: &[Model] = &[
+    Model {
+        id: "ecmwf",
+        name: "ECMWF · Europe",
+        model: "ecmwf_ifs",
+        description: "The European Centre for Medium-Range Weather Forecasts' global model (IFS, about 9 km). \
+            Generally the most accurate global model, and the basis of Yr's forecasts outside the Nordics.",
+    },
+    Model {
+        id: "gfs",
+        name: "GFS · NOAA, US",
+        model: "gfs_seamless",
+        description: "The US National Weather Service's global model. Used worldwide because it's free; \
+            usually a little behind ECMWF.",
+    },
+    Model {
+        id: "icon",
+        name: "ICON · DWD, Germany",
+        model: "icon_seamless",
+        description: "The German Weather Service's global model (about 13 km). Finer versions cover Europe. \
+            About a week ahead.",
+    },
+    Model {
+        id: "ukmo",
+        name: "UK Met Office",
+        model: "ukmo_seamless",
+        description: "The UK Met Office's global Unified Model (about 10 km). The South African Weather Service \
+            runs a 4.4 km regional version of the same model for its own forecasts, so this is the closest \
+            match to official South African forecasts. About a week ahead.",
+    },
+    Model {
+        id: "gem",
+        name: "GEM · Canada",
+        model: "gem_seamless",
+        description: "Environment and Climate Change Canada's global model (about 15 km).",
+    },
 ];
 
 const CURRENT_VARS: &str = "temperature_2m,apparent_temperature,relative_humidity_2m,is_day,\
@@ -60,6 +114,11 @@ struct Fetched<T> {
 }
 
 pub struct OpenMeteoProvider {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    /// None: Open-Meteo's own blend ("best match").
+    model: Option<&'static str>,
     client: reqwest::Client,
     forecast_url: String,
     marine_url: String,
@@ -78,11 +137,38 @@ impl OpenMeteoProvider {
         marine_url: impl Into<String>,
     ) -> Self {
         Self {
+            id: ID,
+            name: "Open-Meteo",
+            description: "Open-Meteo's blend of the best weather models for each place; in southern Africa its \
+                figures match ECMWF's. The only source with tides, waves and sea temperature, and up to 16 days ahead.",
+            model: None,
             client,
             forecast_url: forecast_url.into(),
             marine_url: marine_url.into(),
             forecasts: TtlCache::new(FORECAST_TTL, 256),
             marine: TtlCache::new(MARINE_TTL, 256),
+        }
+    }
+
+    /// One weather model, e.g. `OpenMeteoProvider::model(client, &MODELS[0])`.
+    pub fn model(client: reqwest::Client, model: &Model) -> Self {
+        Self::model_with_url(client, model, FORECAST_URL)
+    }
+
+    pub fn model_with_url(client: reqwest::Client, model: &Model, forecast_url: impl Into<String>) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            description: model.description,
+            model: Some(model.model),
+            ..Self::with_urls(client, forecast_url, MARINE_URL)
+        }
+    }
+
+    fn source(&self, at: DateTime<Utc>) -> SourceMeta {
+        SourceMeta {
+            provider_id: self.id.to_owned(),
+            fetched_at: at,
         }
     }
 
@@ -101,7 +187,11 @@ impl OpenMeteoProvider {
         }
 
         let (lat, lon) = cell_coords(key.0);
-        let req = self.client.get(&self.forecast_url).query(&[
+        let mut req = self.client.get(&self.forecast_url);
+        if let Some(model) = self.model {
+            req = req.query(&[("models", model)]);
+        }
+        let req = req.query(&[
             ("latitude", lat.as_str()),
             ("longitude", lon.as_str()),
             ("current", CURRENT_VARS),
@@ -115,38 +205,35 @@ impl OpenMeteoProvider {
         ]);
         let fetched = Arc::new(Fetched {
             at: Utc::now(),
-            data: get_json::<OmForecast>(ID, req).await?,
+            data: get_json::<OmForecast>(self.id, req).await?,
         });
         self.forecasts.insert(key, fetched.clone());
         Ok(fetched)
     }
 }
 
-fn source(at: DateTime<Utc>) -> SourceMeta {
-    SourceMeta {
-        provider_id: ID.to_owned(),
-        fetched_at: at,
-    }
-}
-
 #[async_trait]
 impl WeatherProvider for OpenMeteoProvider {
     fn id(&self) -> &str {
-        ID
+        self.id
     }
 
     fn name(&self) -> &str {
-        "Open-Meteo"
+        self.name
+    }
+
+    fn description(&self) -> Option<&str> {
+        Some(self.description)
     }
 
     fn capabilities(&self) -> &[Capability] {
-        CAPABILITIES
+        if self.model.is_some() { MODEL_CAPABILITIES } else { CAPABILITIES }
     }
 
     async fn current(&self, point: GeoPoint) -> Result<CurrentConditions, ProviderError> {
         // Same range as the dashboard's default forecast, so both share a request.
         let f = self.fetch_forecast(point, ForecastRange::default()).await?;
-        parse_current(&f.data, source(f.at))
+        parse_current(&f.data, self.source(f.at))
     }
 
     async fn forecast(
@@ -155,7 +242,7 @@ impl WeatherProvider for OpenMeteoProvider {
         range: ForecastRange,
     ) -> Result<Forecast, ProviderError> {
         let f = self.fetch_forecast(point, range).await?;
-        parse_forecast(&f.data, source(f.at))
+        parse_forecast(&f.data, self.source(f.at))
     }
 
     async fn marine(&self, point: GeoPoint) -> Result<Option<MarineReport>, ProviderError> {
@@ -173,7 +260,7 @@ impl WeatherProvider for OpenMeteoProvider {
             ("forecast_days", &MARINE_DAYS.to_string()),
         ]);
         let raw: OmMarine = get_json(ID, req).await?;
-        let report = parse_marine(&raw, source(Utc::now()))?;
+        let report = parse_marine(&raw, self.source(Utc::now()))?;
         self.marine.insert(key, report.clone());
         Ok(report)
     }
@@ -406,7 +493,25 @@ mod tests {
     use super::*;
 
     fn src() -> SourceMeta {
-        source(Utc::now())
+        SourceMeta { provider_id: ID.to_owned(), fetched_at: Utc::now() }
+    }
+
+    #[test]
+    fn models_are_sources_of_their_own_without_marine() {
+        let client = reqwest::Client::new();
+        let blend = OpenMeteoProvider::new(client.clone());
+        assert_eq!(blend.id(), ID);
+        assert!(blend.capabilities().contains(&Capability::Marine));
+
+        let mut ids = vec![ID];
+        for m in MODELS {
+            let p = OpenMeteoProvider::model(client.clone(), m);
+            assert_eq!((p.id(), p.name()), (m.id, m.name));
+            assert_eq!(p.source(Utc::now()).provider_id, m.id);
+            assert!(!p.capabilities().contains(&Capability::Marine));
+            assert!(!ids.contains(&m.id), "duplicate id {}", m.id);
+            ids.push(m.id);
+        }
     }
 
     fn forecast_fixture() -> OmForecast {
@@ -490,5 +595,19 @@ mod tests {
         let m = p.marine(GeoPoint::new(52.11, 4.27)).await.unwrap().unwrap();
         assert!(m.tides.unwrap().events.len() >= 4);
         assert!(p.marine(GeoPoint::new(39.74, -104.99)).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    #[ignore = "hits the network"]
+    async fn live_models() {
+        let cape_town = GeoPoint::new(-33.93, 18.42);
+        for m in MODELS {
+            let p = OpenMeteoProvider::model(crate::http::default_client(), m);
+            let c = p.current(cape_town).await.unwrap();
+            assert_eq!(c.source.provider_id, m.id);
+            let f = p.forecast(cape_town, ForecastRange::default()).await.unwrap();
+            assert!(f.daily.len() >= 5, "{}: {} days", m.id, f.daily.len());
+            assert!(f.hourly.len() >= 40, "{}: {} hours", m.id, f.hourly.len());
+        }
     }
 }

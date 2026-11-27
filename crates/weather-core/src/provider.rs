@@ -23,6 +23,11 @@ pub trait WeatherProvider: Send + Sync {
 
     fn capabilities(&self) -> &[Capability];
 
+    /// A sentence or two for the UI: where the data comes from and what it's good for.
+    fn description(&self) -> Option<&str> {
+        None
+    }
+
     /// Whether this provider covers the given location at all.
     fn supports(&self, _point: GeoPoint) -> bool {
         true
@@ -37,6 +42,7 @@ pub trait WeatherProvider: Send + Sync {
             id: self.id().to_owned(),
             name: self.name().to_owned(),
             capabilities: self.capabilities().to_vec(),
+            description: self.description().map(str::to_owned),
         }
     }
 

@@ -32,6 +32,7 @@ pub fn router() -> Router<AppState> {
         .route("/weather/forecast", get(forecast))
         .route("/alerts", get(alerts))
         .route("/marine", get(marine))
+        .route("/blend", get(blend))
         .route("/geocode", get(geocode_search))
         .route("/geocode/reverse", get(geocode_reverse))
         .merge(
@@ -127,6 +128,18 @@ async fn forecast(
     Ok(Json(
         service::forecast(&state, access, point, range, q.provider.as_deref()).await?,
     ))
+}
+
+async fn blend(
+    State(state): State<AppState>,
+    q: Result<Query<PointQuery>, QueryRejection>,
+) -> Result<Json<weather_core::verify::BlendReport>, ApiError> {
+    let q = query(q)?;
+    let point = GeoPoint::new(q.lat, q.lon);
+    if !point.is_valid() {
+        return Err(ProviderError::InvalidLocation { lat: q.lat, lon: q.lon }.into());
+    }
+    Ok(Json(service::blend_report(&state, point)))
 }
 
 async fn alerts(
@@ -279,6 +292,17 @@ mod tests {
         let req = Request::get("/weather/forecast?lat=1&lon=1").body(Body::empty()).unwrap();
         let (status, _) = send(token, req).await;
         assert_eq!(status, 422);
+    }
+
+    #[tokio::test]
+    async fn blend_report_starts_from_estimates() {
+        let (status, body) = get("/blend?lat=-33.93&lon=18.42").await;
+        assert_eq!(status, 200);
+        assert!(body["station"].is_null());
+        assert_eq!(body["sources"], serde_json::json!([]), "no blend sources in this router");
+
+        let (status, body) = get("/blend?lat=123&lon=18.42").await;
+        assert_eq!(status, 400, "{body}");
     }
 
     #[tokio::test]

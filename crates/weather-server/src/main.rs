@@ -6,6 +6,7 @@ mod mcp;
 mod rest;
 mod service;
 mod state;
+mod verification;
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
@@ -22,8 +23,9 @@ use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 use weather_core::{
     http::default_client,
-    providers::{open_meteo, NwsProvider, OpenMeteoProvider, SawsProvider},
-    ProviderRegistry,
+    providers::{open_meteo, BlendProvider, MetNoProvider, NwsProvider, OpenMeteoProvider, SawsProvider},
+    verify::Verifier,
+    ProviderRegistry, WeatherProvider,
 };
 
 use crate::state::AppState;
@@ -40,12 +42,26 @@ async fn main() -> anyhow::Result<()> {
     let http = default_client();
     let mut registry = ProviderRegistry::new().with_fallback(open_meteo::ID);
     registry.register(Arc::new(OpenMeteoProvider::new(http.clone())));
+    // Independent forecasts: selectable on their own, and the ingredients of the blend.
+    let mut blend_sources: Vec<Arc<dyn WeatherProvider>> = open_meteo::MODELS
+        .iter()
+        .map(|m| Arc::new(OpenMeteoProvider::model(http.clone(), m)) as Arc<dyn WeatherProvider>)
+        .collect();
+    blend_sources.push(Arc::new(MetNoProvider::new(http.clone())));
+    for source in &blend_sources {
+        registry.register(source.clone());
+    }
+    let verifier = Arc::new(Verifier::new(http.clone()));
+    registry.register(Arc::new(BlendProvider::new(blend_sources.clone(), verifier.clone())));
     registry.register(Arc::new(NwsProvider::new(http.clone())));
     registry.register(Arc::new(SawsProvider::new(http.clone())));
 
     let data_dir = PathBuf::from(std::env::var("DATA_DIR").unwrap_or_else(|_| "data".into()));
     let mut state = AppState::new(registry, http, Some(data_dir));
+    state.verifier = verifier;
+    state.blend_sources = Arc::new(blend_sources);
     custom_store::load_into(&state);
+    verification::load(&state);
 
     let shutdown = CancellationToken::new();
     let allowed = guard::AllowedHosts::from_env();
@@ -112,11 +128,14 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let state_for_check = state.clone();
     let app = app
         .with_state(state)
         .layer(middleware::from_fn_with_state(token, auth::identify))
         .layer(middleware::from_fn_with_state(allowed, guard::check))
         .layer(TraceLayer::new_for_http());
+
+    verification::spawn(state_for_check, shutdown.child_token());
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

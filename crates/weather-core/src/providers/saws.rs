@@ -132,6 +132,14 @@ impl WeatherProvider for SawsProvider {
         "South African Weather Service"
     }
 
+    fn description(&self) -> Option<&str> {
+        Some(
+            "Official severe weather warnings for South Africa, with impact levels. Its forecasts come from a 4.4 km \
+             regional version of the UK Met Office's Unified Model, so the UK Met Office source is the closest match \
+             to them.",
+        )
+    }
+
     fn capabilities(&self) -> &[Capability] {
         CAPABILITIES
     }

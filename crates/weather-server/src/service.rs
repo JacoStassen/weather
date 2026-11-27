@@ -6,6 +6,7 @@ use weather_core::{
     AlertsResponse, Capability, CurrentConditions, Forecast, ForecastRange, GeoPoint,
     MarineResponse, ProviderError, WeatherProvider,
 };
+use weather_core::verify::BlendReport;
 
 use crate::{auth::Access, state::AppState};
 
@@ -31,6 +32,7 @@ pub async fn current(
     point: GeoPoint,
     provider: Option<&str>,
 ) -> Result<CurrentConditions, ProviderError> {
+    state.verifier.track(point, chrono::Utc::now());
     resolve(state, access, Capability::Current, point, provider)?
         .current(point)
         .await
@@ -43,9 +45,16 @@ pub async fn forecast(
     range: ForecastRange,
     provider: Option<&str>,
 ) -> Result<Forecast, ProviderError> {
+    state.verifier.track(point, chrono::Utc::now());
     resolve(state, access, Capability::Hourly, point, provider)?
         .forecast(point, range)
         .await
+}
+
+/// How the blend is weighted at `point`, and against which station.
+pub fn blend_report(state: &AppState, point: GeoPoint) -> BlendReport {
+    let ids: Vec<&str> = state.blend_sources.iter().map(|s| s.id()).collect();
+    state.verifier.report(point, &ids)
 }
 
 /// Outside every alert provider's coverage this succeeds with

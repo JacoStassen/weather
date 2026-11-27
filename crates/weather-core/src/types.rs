@@ -46,6 +46,9 @@ pub struct ProviderInfo {
     pub id: String,
     pub name: String,
     pub capabilities: Vec<Capability>,
+    /// Where the data comes from and what it's good for.
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 /// Which provider produced a piece of data, and when.

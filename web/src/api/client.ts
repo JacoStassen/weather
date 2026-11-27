@@ -1,5 +1,6 @@
 import type {
   AlertsResponse,
+  BlendReport,
   CurrentConditions,
   CustomProviderConfig,
   CustomProviderTestResult,
@@ -83,6 +84,7 @@ export const api = {
     request<Forecast>(`/weather/forecast?${qs({ ...p, provider })}`, { signal }),
   alerts: (p: Point, signal?: AbortSignal) => request<AlertsResponse>(`/alerts?${qs({ ...p })}`, { signal }),
   marine: (p: Point, signal?: AbortSignal) => request<MarineResponse>(`/marine?${qs({ ...p })}`, { signal }),
+  blend: (p: Point, signal?: AbortSignal) => request<BlendReport>(`/blend?${qs({ ...p })}`, { signal }),
 
   geocode: (q: string, signal?: AbortSignal) => request<Place[]>(`/geocode?${qs({ q })}`, { signal }),
   reverseGeocode: (p: Point) => request<Place | null>(`/geocode/reverse?${qs({ ...p })}`),

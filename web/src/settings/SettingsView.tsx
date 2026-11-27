@@ -7,6 +7,8 @@ import { placeLabel } from '../lib/format'
 import { Header, AddLocationDialog } from '../components/Header'
 import { Card, ErrorNote, buttonClass, inputClass } from '../components/ui'
 import { CustomProviderEditor } from './CustomProviderEditor'
+import { CompareSources } from './CompareSources'
+import { BlendWeights } from './BlendWeights'
 
 export function SettingsView() {
   return (
@@ -17,6 +19,8 @@ export function SettingsView() {
         <StorageNotice />
         <ServerAccess />
         <DataSource />
+        <CompareSources />
+        <BlendWeights />
         <UnitsSection />
         <Appearance />
         <Locations />
@@ -129,12 +133,12 @@ function DataSource() {
   const active = useSettings((s) => s.activeProviderId)
   const setActive = useSettings((s) => s.setActiveProvider)
   const selectable = providers.filter((p) => p.capabilities.includes('current'))
+  const alertSources = providers.filter((p) => p.capabilities.includes('alerts'))
 
   return (
     <Card title="Data source" icon={Server}>
       <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-        Used for current conditions and, where it provides them, forecasts. Anything it doesn’t cover comes from Open-Meteo. Severe
-        weather alerts always come from the National Weather Service (US) or the South African Weather Service.
+        Used for current conditions and forecasts. Anything a source doesn’t cover (such as tides and waves) comes from Open-Meteo.
       </p>
       <div className="space-y-2" role="radiogroup" aria-label="Data source">
         {selectable.map((p) => (
@@ -159,7 +163,10 @@ function DataSource() {
                 {p.name}
                 {p.id === DEFAULT_PROVIDER && <span className="ml-2 text-xs font-normal text-slate-500">default</span>}
               </span>
-              <span className="mt-1 flex flex-wrap gap-1">
+              {p.description && (
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{p.description}</span>
+              )}
+              <span className="mt-1.5 flex flex-wrap gap-1">
                 {p.capabilities.map((c) => (
                   <span key={c} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                     {CAP_LABEL[c]}
@@ -173,6 +180,22 @@ function DataSource() {
           <ErrorNote message={`The selected source “${active}” isn’t available. Pick another one.`} />
         )}
       </div>
+      {alertSources.length > 0 && (
+        <>
+          <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
+            Severe weather alerts
+          </h3>
+          <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">Always from the official service for the place, whichever source you pick.</p>
+          <ul className="space-y-2">
+            {alertSources.map((p) => (
+              <li key={p.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <span className="block text-sm font-medium">{p.name}</span>
+                {p.description && <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{p.description}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </Card>
   )
 }
@@ -193,7 +216,7 @@ function Appearance() {
         />
         <Toggle
           label="Animations"
-          detail="Gentle motion such as drifting clouds, falling rain and a turning sun. Starts off when your device asks for reduced motion."
+          detail="Gentle motion such as drifting clouds, falling rain and a glowing sun. Starts off when your device asks for reduced motion."
           checked={animations}
           onChange={(on) => void setAnimations(on)}
         />

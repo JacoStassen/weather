@@ -14,6 +14,7 @@ pub mod providers;
 pub mod registry;
 pub mod tides;
 pub mod types;
+pub mod verify;
 
 pub use error::ProviderError;
 pub use provider::WeatherProvider;

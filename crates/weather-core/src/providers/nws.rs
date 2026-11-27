@@ -57,6 +57,10 @@ impl WeatherProvider for NwsProvider {
         "National Weather Service (US)"
     }
 
+    fn description(&self) -> Option<&str> {
+        Some("Official watches, warnings and advisories for the United States.")
+    }
+
     fn capabilities(&self) -> &[Capability] {
         CAPABILITIES
     }

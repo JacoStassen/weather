@@ -123,6 +123,11 @@ Point Uptime Kuma at `https://weather.stassen.org.za/api/health` (HTTP, keyword 
 
 ## Notes
 
-- **Backups:** the only server-side data is `/var/lib/weather/custom-providers.json`, the copy of your custom sources (with their API keys) that the app re-sends whenever you change them. Each browser keeps its own settings and saved places in its private storage.
+- **Backups:** the server keeps two files in `/var/lib/weather`:
+  - `custom-providers.json`: the copy of your custom sources (with their API keys), which the app re-sends whenever you change them;
+  - `verification.json`: the blend's accuracy record. Losing it only means the blend learns again for a day or two.
+
+  Each browser keeps its own settings and saved places in its private storage.
+- **The blend's accuracy check** follows the places people view (up to 20, forgotten after 14 days without a view), stored to about 1 km. Each hour it asks every forecast source for the nearest airport weather station's location and reads that station's report from aviationweather.gov: roughly 7 upstream requests per place per hour.
 - **Data sources:** Nominatim (place names for "my location") asks for at most one request per second. The server caches names per ~1 km for a day, which keeps a personal dashboard far below that.
 - **Without the token**, a visitor's own custom sources stay in their browser and aren't used. The data source list shows only the built-in ones.

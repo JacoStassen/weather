@@ -4,4 +4,8 @@ import type { Capability } from "./Capability";
 /**
  * Public description of a registered provider.
  */
-export type ProviderInfo = { id: string, name: string, capabilities: Array<Capability>, };
+export type ProviderInfo = { id: string, name: string, capabilities: Array<Capability>, 
+/**
+ * Where the data comes from and what it's good for.
+ */
+description: string | null, };
